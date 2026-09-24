@@ -29,8 +29,8 @@ function mat(name, opts = {}) {
 }
 // texel scale: metres per texture repeat
 const MATS = {
-  carpet:    { m: () => mat('dirty_carpet', { color: 0xa0584c }), s: 1.6 },
-  wallpaper: { m: () => mat('decrepit_wallpaper', { color: 0xa9a292 }), s: 1.3 },
+  carpet:    { m: () => mat('ship_carpet', { roughness: 0.95, normal: 0.6 }), s: 1.8 },
+  wallpaper: { m: () => mat('ship_wallpaper', { roughness: 0.8, normal: 0.5, color: 0xa8a8a8 }), s: 1.6 },
   panel:     { m: () => mat('dark_paneled_wood', { roughness: 0.6 }), s: 1.1 },
   parquet:   { m: () => mat('herringbone_parquet', { roughness: 0.45, color: 0x9a8a78 }), s: 1.6 },
   tiles:     { m: () => mat('dirty_tiles', { roughness: 0.35 }), s: 1.2 },
