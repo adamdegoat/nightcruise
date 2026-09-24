@@ -1,1 +1,78 @@
-<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=captain.html"><title>Nightcruise</title>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta http-equiv="Cache-Control" content="no-cache">
+<title>Nightcruise</title>
+<style>
+  :root { --ink: #d8d2c4; --dim: #7f7a6e; --bg: #040506; --red: #b3261e; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; position: fixed; inset: 0;
+    font: 13px/1.3 ui-monospace, "SF Mono", Menlo, monospace; -webkit-user-select: none; user-select: none; touch-action: none; }
+  #view canvas { display: block; }
+  #touch { position: fixed; inset: 0; touch-action: none; }
+  #fps { position: fixed; top: max(6px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); color: #3c3a35; font-size: 11px; }
+
+  /* move stick appears where the left thumb lands */
+  #stick { position: fixed; width: 112px; height: 112px; margin: -56px 0 0 -56px; border: 1px solid rgba(216,210,196,.18);
+    border-radius: 50%; display: none; pointer-events: none; }
+  #knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(216,210,196,.14); border: 1px solid rgba(216,210,196,.3); transform: translate(-50%,-50%); }
+
+  .btn { position: fixed; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(216,210,196,.25);
+    background: rgba(8,8,8,.35); color: rgba(216,210,196,.75); font-size: 10px; letter-spacing: .08em; touch-action: none; }
+  .btn.down, .btn.on { background: rgba(216,210,196,.18); color: var(--ink); border-color: rgba(216,210,196,.55); }
+  #btn-run    { width: 74px; height: 74px; right: calc(max(18px, env(safe-area-inset-right)) + 0px);  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 0px); }
+  #btn-crouch { width: 58px; height: 58px; right: calc(max(18px, env(safe-area-inset-right)) + 92px); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 4px); }
+  #btn-act    { width: 64px; height: 64px; right: calc(max(18px, env(safe-area-inset-right)) + 8px);  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 96px); display: none; }
+  body:not(.playing) .btn { display: none !important; }
+
+  #stamina { position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); width: 140px; height: 2px; margin-left: -70px;
+    background: rgba(216,210,196,.12); opacity: 0; transition: opacity .6s; }
+  #stamina-fill { height: 100%; background: rgba(216,210,196,.6); transform-origin: left; }
+  #stamina-fill.empty { background: var(--red); }
+
+  #start { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 max(8vw, env(safe-area-inset-left));
+    background: rgba(4,5,6,.72); }
+  #start h1 { margin: 0 0 6px; font: 600 clamp(28px, 6vw, 54px)/1 Georgia, "Times New Roman", serif; letter-spacing: .02em; color: var(--ink); }
+  #start p { margin: 0 0 22px; color: var(--dim); max-width: 34em; }
+  #start .row { display: flex; gap: 10px; }
+  #start button { font: inherit; color: var(--ink); background: transparent; border: 1px solid rgba(216,210,196,.35); padding: 12px 18px; border-radius: 2px; letter-spacing: .06em; }
+  #start button:active { background: rgba(216,210,196,.12); }
+
+  #rotate { position: fixed; inset: 0; display: none; place-items: center; background: var(--bg); color: var(--dim); text-align: center; padding: 30px; z-index: 10; }
+  @media (orientation: portrait) and (max-width: 900px) { #rotate { display: grid; } }
+</style>
+</head>
+<body>
+<div id="view"></div>
+<div id="touch"></div>
+<div id="stick"><div id="knob"></div></div>
+<div class="btn" id="btn-act">OPEN</div>
+<div class="btn" id="btn-crouch">CROUCH</div>
+<div class="btn" id="btn-run">RUN</div>
+<div id="stamina"><div id="stamina-fill"></div></div>
+<div id="fps"></div>
+
+<div id="start">
+  <h1>Nightcruise</h1>
+  <p>Something walks the decks at night. Stay out of its way until dawn.</p>
+  <div class="row">
+    <button data-min="10">10 minutes</button>
+    <button data-min="20">20 minutes</button>
+  </div>
+</div>
+<div id="rotate">Turn your phone sideways.</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="js/main.js?v=1"></script>
+</body>
+</html>
