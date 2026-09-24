@@ -2,7 +2,7 @@
 // States: RISE -> WANDER <-> INVESTIGATE (heard something) -> CHASE (saw you) -> SEARCH (lost you) -> WANDER.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { lineClear, segmentHitsBox } from './nav.js';
+import { lineClear, segmentHitsBox } from './nav.js?v=4';
 
 export const CAP = {
   wander: 0.8, investigate: 1.25, search: 1.1, chase: 3.3,   // m/s (you walk 1.45, run 3.9)

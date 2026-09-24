@@ -1,10 +1,10 @@
 // Nightcruise, stage 2: walk the first deck. No captain yet (stage 3), no hiding/timer yet (stage 4).
 import * as THREE from 'three';
-import { buildLevel } from './level.js';
-import { Input } from './input.js';
-import { Player, PLAYER } from './player.js';
-import { buildNav } from './nav.js';
-import { Captain } from './captain.js';
+import { buildLevel } from './level.js?v=4';
+import { Input } from './input.js?v=4';
+import { Player, PLAYER } from './player.js?v=4';
+import { buildNav } from './nav.js?v=4';
+import { Captain } from './captain.js?v=4';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
