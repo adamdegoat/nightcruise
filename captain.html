@@ -44,7 +44,7 @@ document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x030405);
-scene.fog = new THREE.FogExp2(0x040607, 0.09);
+scene.fog = new THREE.FogExp2(0x05080a, 0.075);
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 60);
 camera.position.set(0, 1.62, 0);
 scene.add(camera);
@@ -74,20 +74,24 @@ for (let i = 0; i < 8; i++) {
   p.scale.x = 1.6;
 }
 
-// ---- lights: one cold emergency lamp every 6m that flickers; the flashlight is the main light
-scene.add(new THREE.HemisphereLight(0x1a2630, 0x050505, 0.35));
+// ---- lights: no torch. The ship is dimly lit by its own emergency lamps: pools of light with dark gaps
+// between them, some red, one dead. Lamps near the captain stutter and die, so you sense him before you see him.
+scene.add(new THREE.HemisphereLight(0x223040, 0x080808, 0.55));
 const lamps = [];
-for (let z = -3; z > -L + 2; z -= 6) {
-  const l = new THREE.PointLight(0x9fc4ff, 2.2, 7, 1.6); l.position.set(0, Hc - 0.15, z); scene.add(l);
-  add(new THREE.BoxGeometry(0.3, 0.05, 0.12), new THREE.MeshBasicMaterial({ color: 0xbcd6ff }), 0, Hc - 0.03, z);
-  lamps.push({ l, base: 2.2, t: Math.random() * 10 });
-}
-const torch = new THREE.SpotLight(0xfff1dc, 14, 18, Math.PI / 7, 0.45, 1.3);
-window.__torch = torch;
-torch.position.set(0.18, -0.2, 0); torch.castShadow = true;
-torch.shadow.mapSize.set(512, 512); torch.shadow.camera.near = 0.2; torch.shadow.bias = -0.0005;
-camera.add(torch); camera.add(torch.target); torch.target.position.set(0, -0.15, -3);
-let torchOn = true;
+const LAMP_Z = [-2.5, -6.5, -10.5, -14.5, -18.5];
+const LAMP_KIND = ['cold', 'red', 'cold', 'dead', 'cold'];
+LAMP_Z.forEach((z, i) => {
+  const kind = LAMP_KIND[i];
+  const col = kind === 'red' ? 0xff3322 : 0xa8c8ff;
+  const base = kind === 'dead' ? 0 : kind === 'red' ? 2.4 : 3.2;
+  const l = new THREE.PointLight(col, base, 6.5, 1.7); l.position.set(0, Hc - 0.2, z); scene.add(l);
+  const shade = new THREE.MeshBasicMaterial({ color: kind === 'dead' ? 0x111111 : col });
+  add(new THREE.BoxGeometry(0.3, 0.05, 0.12), shade, 0, Hc - 0.03, z);
+  lamps.push({ l, shade, col, base, t: Math.random() * 10, kind });
+});
+
+// close-up view only: a lamp just above him, as if he's caught you right under one
+const faceLamp = new THREE.PointLight(0xffe6c8, 0, 2.5, 1.5); scene.add(faceLamp);
 
 // ---- the captain
 let captain, mixer, actions = {}, current, jaw, head, neck, bones = {};
@@ -98,7 +102,7 @@ new GLTFLoader().load('captain.glb?v=' + Date.now(), (g) => {
     if (o.isMesh) {
       o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
       const m = o.material;
-      if (m.name === 'milky_eye') { m.roughness = 0.12; m.emissive = new THREE.Color(0x6f7c78); m.emissiveIntensity = 0.12; }
+      if (m.name === 'milky_eye') { m.roughness = 0.12; m.emissive = new THREE.Color(0x9fb0aa); m.emissiveIntensity = 0.35; }
       if (m.name === 'wet_hair') { m.roughness = 0.5; m.side = THREE.DoubleSide; }
       if (m.name === 'seaweed') { m.side = THREE.DoubleSide; m.roughness = 0.35; }
       if (m.name === 'coat') m.side = THREE.DoubleSide;
@@ -218,7 +222,6 @@ for (const [label, fn, key] of [
   ['walk', () => setMode('walk'), 'walk'], ['run', () => setMode('run'), 'run'], ['idle', () => setMode('idle'), 'idle'],
   ['grab', () => setMode('grab'), 'grab'], ['rise', () => setMode('rise'), 'rise'],
   ['catch', () => { if (!captain) return; view = 'corridor'; yaw = 0; pitch = 0; captain.position.z = -7; catching = true; setMode('run'); }, null],
-  ['torch', () => { torchOn = !torchOn; torch.visible = torchOn; }, null],
   ['face', () => { view = view === 'face' ? 'corridor' : 'face'; }, null],
   ['restart', () => { if (captain) captain.position.z = -16; setMode(mode); }, null],
 ]) {
@@ -249,11 +252,10 @@ renderer.setAnimationLoop(() => {
       // below and in front of his face, looking up: the angle you'd see him from when he catches you
       camera.position.set(hp.x + 0.12, hp.y - 0.16, hp.z + TUNE.faceDist);
       camera.lookAt(hp.x, hp.y - 0.02, hp.z);
-      // aim the torch at his face (in the game it follows your view; here the camera sits below him)
-      camera.updateMatrixWorld(); torch.target.position.copy(camera.worldToLocal(hp.clone().add(new THREE.Vector3(0, 0.05, 0.08))));
+      faceLamp.position.set(hp.x + 0.25, hp.y + 0.2, hp.z + 0.45); faceLamp.intensity = 2.2 * (Math.random() < 0.03 ? 0.1 : 1);
     } else {
       camera.position.set(0, 1.62, 0);
-      torch.target.position.set(0, -0.15, -3);
+      faceLamp.intensity = 0;
       camera.rotation.set(pitch, yaw, 0, 'YXZ');
       if (shake > 0) {
         shake -= dt;
@@ -265,8 +267,16 @@ renderer.setAnimationLoop(() => {
   }
   for (const L_ of lamps) {
     L_.t += dt;
-    const f = Math.sin(L_.t * 3) > 0.97 || Math.random() < 0.012 ? 0.05 : 1;
+    let f = Math.sin(L_.t * 3) > 0.97 || Math.random() < 0.01 ? 0.08 : 1;
+    if (captain) {
+      const d = Math.abs(captain.position.z - L_.l.position.z);
+      if (d < 4.5) {                                   // he is close: the lamp stutters, then goes out
+        const k = 1 - d / 4.5;
+        if (Math.random() < 0.25 + k * 0.6) f *= Math.random() * (1 - k * 0.9);
+      }
+    }
     L_.l.intensity = L_.base * f;
+    L_.shade.color.setHex(f > 0.3 && L_.base > 0 ? L_.col : 0x111111);
   }
   for (let i = 0; i < DRIPS; i++) {
     dripVel[i] += 9.8 * dt; dripPos[i * 3 + 1] -= dripVel[i] * dt;
@@ -275,7 +285,6 @@ renderer.setAnimationLoop(() => {
   dripGeo.attributes.position.needsUpdate = true;
   renderer.render(scene, camera);
   frames++; acc += dt;
-  if (view === 'face') torch.intensity = TUNE.torchNear; else torch.intensity = 14;
   if (acc > 1) { info.textContent = `${Math.round(frames / acc)} fps`; frames = 0; acc = 0; }
 });
 </script>
