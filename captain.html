@@ -37,14 +37,14 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.25;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x030405);
-scene.fog = new THREE.FogExp2(0x05080a, 0.075);
+scene.fog = new THREE.FogExp2(0x070a0d, 0.06);
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 60);
 camera.position.set(0, 1.62, 0);
 scene.add(camera);
@@ -76,7 +76,7 @@ for (let i = 0; i < 8; i++) {
 
 // ---- lights: no torch. The ship is dimly lit by its own emergency lamps: pools of light with dark gaps
 // between them, some red, one dead. Lamps near the captain stutter and die, so you sense him before you see him.
-scene.add(new THREE.HemisphereLight(0x223040, 0x080808, 0.55));
+const hemi = new THREE.HemisphereLight(0x6a7f96, 0x2a2c30, 1.1); scene.add(hemi); window.__hemi = hemi;
 const lamps = [];
 const LAMP_Z = [-2.5, -6.5, -10.5, -14.5, -18.5];
 const LAMP_KIND = ['cold', 'red', 'cold', 'dead', 'cold'];
@@ -84,7 +84,7 @@ LAMP_Z.forEach((z, i) => {
   const kind = LAMP_KIND[i];
   const col = kind === 'red' ? 0xff3322 : 0xa8c8ff;
   const base = kind === 'dead' ? 0 : kind === 'red' ? 2.4 : 3.2;
-  const l = new THREE.PointLight(col, base, 6.5, 1.7); l.position.set(0, Hc - 0.2, z); scene.add(l);
+  const l = new THREE.PointLight(col, base, 8, 1.6); l.position.set(0, Hc - 0.2, z); scene.add(l);
   const shade = new THREE.MeshBasicMaterial({ color: kind === 'dead' ? 0x111111 : col });
   add(new THREE.BoxGeometry(0.3, 0.05, 0.12), shade, 0, Hc - 0.03, z);
   lamps.push({ l, shade, col, base, t: Math.random() * 10, kind });
