@@ -160,8 +160,8 @@ export function buildLevel(scene) {
     pivot.add(leaf); scene.add(pivot);
     const base = pivot.rotation.y;
     const cx = alongX ? hx + width / 2 : hx, cz = alongX ? hz : hz + width / 2;
-    const col = alongX ? { minX: hx, maxX: hx + width, minZ: hz - 0.06, maxZ: hz + 0.06 }
-                       : { minX: hx - 0.06, maxX: hx + 0.06, minZ: hz, maxZ: hz + width };
+    const col = alongX ? { minX: hx, maxX: hx + width, minZ: hz - 0.06, maxZ: hz + 0.06, door: true }
+                       : { minX: hx - 0.06, maxX: hx + 0.06, minZ: hz, maxZ: hz + width, door: true };
     colliders.push(col);
     doors.push({ pivot, base, openDir, angle: 0, target: 0, open: false, center: new THREE.Vector3(cx, 1, cz), col });
   }
@@ -268,6 +268,7 @@ export function buildLevel(scene) {
     for (let c = 0; c < 4; c++) {
       const a = c * Math.PI / 2 + 0.3 * (tIndex % 3);
       const cx = tx + Math.cos(a) * 0.95, cz = tz + Math.sin(a) * 0.95;
+      if (Math.hypot(cx - 37.6, cz + 3.5) < 1.3) continue;          // keep the kitchen door clear
       const fallen = (tIndex * 4 + c) % 7 === 3;
       if (fallen) {
         box(bucket, 'darkwood', cx, 0.22, cz, 0.45, 0.44, 0.9, a);                     // chair on its back
@@ -360,8 +361,8 @@ export function buildLevel(scene) {
     for (let k = 0; k < 3; k++) box(bucket, 'linen', x0 + 0.6 + rnd() * 2.6, 0.03, (1.1 + 0.6 + rnd() * 1.5) * side, 0.35 + rnd() * 0.3, 0.05, 0.3 + rnd() * 0.3, rnd() * 3);
   }
   // corridor: overturned room-service trolley, a fire extinguisher on the floor, a life ring, papers everywhere
-  solid('steel', 16.3, 0.35, 0.45, 0.9, 0.7, 0.5, 0.35);
-  box(bucket, 'linen', 16.3, 0.72, 0.45, 0.95, 0.03, 0.55, 0.35);
+  solid('steel', 17.7, 0.35, 0.45, 0.9, 0.7, 0.5, 0.35);
+  box(bucket, 'linen', 17.7, 0.72, 0.45, 0.95, 0.03, 0.55, 0.35);
   for (let k = 0; k < 3; k++) { const pl = new THREE.CylinderGeometry(0.12, 0.1, 0.02, 14); pl.translate(15.4 + k * 0.35, 0.011, -0.2 + k * 0.2); addGeo(bucket, 'white', pl); }
   const ext = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 10); ext.rotateZ(Math.PI / 2); ext.rotateY(0.6); ext.translate(11.2, 0.08, -0.65); addGeo(bucket, 'redpaint', ext);
   const ring = new THREE.TorusGeometry(0.3, 0.07, 8, 20); ring.translate(24.7, 1.5, -1.0); addGeo(bucket, 'redpaint', ring);

@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { buildLevel } from './level.js';
 import { Input } from './input.js';
 import { Player, PLAYER } from './player.js';
+import { buildNav } from './nav.js';
+import { Captain } from './captain.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
@@ -21,6 +23,10 @@ scene.add(camera);
 scene.add(new THREE.HemisphereLight(0x6a7f96, 0x2a2c30, 1.0));
 
 const level = buildLevel(scene);
+const nav = buildNav(level);
+const captain = new Captain(scene, level, nav);
+const captainReady = captain.load('captain.glb?v=3');
+const DEBUG = new URLSearchParams(location.search).has('debug');
 
 // ---- lamps: every lamp has a fixture; only the 6 nearest working ones get a real light (phones can't afford 30)
 const KIND = {
@@ -59,10 +65,18 @@ for (const b of document.querySelectorAll('[data-min]')) {
     const el = document.documentElement;
     el.requestFullscreen?.().catch(() => {});
     screen.orientation?.lock?.('landscape').catch(() => {});
-    running = true;
+    startGame();
   });
 }
-if (new URLSearchParams(location.search).has('play')) { ui.start.style.display = 'none'; document.body.classList.add('playing'); running = true; }
+function startGame() {
+  running = true;
+  captainReady.then(() => {
+    captain.spawn(player.pos);
+    const q = new URLSearchParams(location.search).get('cap');        // test hook: ?cap=x,z puts him there, awake
+    if (q) { const [x, z] = q.split(',').map(Number); captain.pos.set(x, 0, z); captain.setState('WANDER'); captain.yaw = Math.atan2(player.pos.x - x, player.pos.z - z); }
+  });
+}
+if (new URLSearchParams(location.search).has('play')) { ui.start.style.display = 'none'; document.body.classList.add('playing'); startGame(); }
 
 addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
@@ -99,6 +113,10 @@ function updateLamps(dt) {
     let f = 1;
     if (Math.sin(L.t * 2.3) > 0.985 || Math.random() < 0.006) f = 0.08;
     if (L.k.flicker && Math.random() < L.k.flicker) f = Math.random() * 0.5;
+    if (captain.root?.visible) {                      // he's near: the lamp stutters, then dies
+      const cd = Math.hypot(captain.pos.x - L.pos.x, captain.pos.z - L.pos.z);
+      if (cd < 4.5) { const k = 1 - cd / 4.5; if (Math.random() < 0.25 + k * 0.6) f *= Math.random() * (1 - k * 0.9); }
+    }
     L.level = f;
     L.mat.color.setHex(f > 0.3 ? L.k.color : 0x151515);
     L.dist = L.pos.distanceTo(tmp.set(player.pos.x, 1.5, player.pos.z));
@@ -115,25 +133,83 @@ function updateLamps(dt) {
   }
 }
 
+// is this spot lit by a working lamp right now? (he sees you much further in the light)
+function lightAt(x, z) {
+  for (const L of level.lamps) {
+    if (!L.k.power || L.level < 0.3) continue;
+    if (Math.hypot(L.pos.x - x, L.pos.z - z) < L.k.range * 0.45) return true;
+  }
+  return false;
+}
+
+// ---- noise you make: running is loud, walking quiet, crouching near-silent, gasping when out of breath
+const noises = [];
+function playerNoise() {
+  let r = 0;
+  if (player.speed > 0.1) r = player.running ? 11 : player.crouching ? 0.8 : 3.5 * Math.min(1, player.speed / PLAYER.walk);
+  if (player.stamina < 25) r = Math.max(r, 3);
+  if (r > 0) noises.push({ x: player.pos.x, z: player.pos.z, r });
+}
+
+// ---- caught: he grabs you, the view snaps to his face, then black
+const over = document.getElementById('over');
+const catchLight = new THREE.PointLight(0xdfe6ff, 0, 3.5, 1.5); scene.add(catchLight);
+let caughtT = -1;
+const tmpV = new THREE.Vector3();
+function caughtSequence(dt) {
+  caughtT += dt;
+  captain.headWorld(tmpV);
+  // the view is dragged onto his face: camera ends up just in front of it, looking straight in
+  const fwdX = Math.sin(captain.yaw), fwdZ = Math.cos(captain.yaw);
+  const k = Math.min(1, caughtT * 5);
+  const want = new THREE.Vector3(tmpV.x + fwdX * 0.7, tmpV.y + 0.0, tmpV.z + fwdZ * 0.7);
+  if (caughtT < dt * 1.5) camera.userData.from = camera.position.clone();
+  camera.position.lerpVectors(camera.userData.from, want, k);
+  camera.lookAt(tmpV.x + fwdX * 0.1, tmpV.y + 0.04, tmpV.z + fwdZ * 0.1);
+  camera.position.x += (Math.random() - .5) * 0.02 * k; camera.position.y += (Math.random() - .5) * 0.02 * k;
+  // a stuttering light right on his face, so you see exactly what caught you
+  catchLight.position.set(camera.position.x + (tmpV.x - camera.position.x) * 0.4, tmpV.y + 0.35, camera.position.z + (tmpV.z - camera.position.z) * 0.4);
+  catchLight.intensity = Math.random() < 0.12 ? 0.2 : 3.2;
+  // he closes the last half metre
+  const dx = player.pos.x - captain.pos.x, dz = player.pos.z - captain.pos.z, d = Math.hypot(dx, dz);
+  if (d > 0.85) { captain.pos.x += dx / d * dt * 2.5; captain.pos.z += dz / d * dt * 2.5; }
+  captain.yaw = Math.atan2(dx, dz);
+  if (caughtT > 1.3 && over.style.display !== 'flex') {
+    over.style.display = 'flex';
+    const secs = Math.round(simT - startedAt);
+    document.getElementById('over-time').textContent = `You lasted ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}.`;
+  }
+}
+document.getElementById('retry').addEventListener('click', () => location.reload());
+let startedAt = 0;
+
 // ---- loop
 const clock = new THREE.Clock();
 let frames = 0, acc = 0, shownDoor = null;
-renderer.setAnimationLoop(() => {
-  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+let simT = 0;
+function tick(dt, t, render = true) {
   const inp = input.read();
-  if (running) {
+  if (running && captain.caught) {
+    if (caughtT < 0) { caughtT = 0; ui.act.style.display = 'none'; document.body.classList.remove('playing'); }
+    caughtSequence(dt);
+    captain.update(dt, t, player, [], lightAt);
+  } else if (running) {
+    if (!startedAt) startedAt = t;
     player.update(dt, inp, t);
+    noises.length = 0; playerNoise();
     const d = nearestDoor();
     if (d !== shownDoor) {
       shownDoor = d;
       ui.act.style.display = d ? 'grid' : 'none';
     }
     if (d) ui.act.textContent = d.target > 0 ? 'CLOSE' : 'OPEN';
-    if (d && inp.action) { d.target = d.target > 0 ? 0 : 1.66; }
+    if (d && inp.action) { d.target = d.target > 0 ? 0 : 1.66; noises.push({ x: d.center.x, z: d.center.z, r: 7 }); }
     const s = player.stamina / PLAYER.staminaMax;
     ui.stamina.style.opacity = s < 0.99 ? 1 : 0;
     ui.fill.style.transform = `scaleX(${s})`;
     ui.fill.classList.toggle('empty', player.exhausted);
+    captain.update(dt, t, player, noises, lightAt);
+    if (DEBUG) ui.fps.textContent = captain.debug;
   } else {
     // behind the start screen: slow look down the corridor
     camera.position.set(3.2, 1.62, 0); camera.rotation.set(0, -Math.PI / 2 + Math.sin(t * 0.2) * 0.15, 0.03, 'YXZ');
@@ -141,8 +217,13 @@ renderer.setAnimationLoop(() => {
   }
   updateDoors(dt);
   updateLamps(dt);
-  renderer.render(scene, camera);
+  if (render) renderer.render(scene, camera);
   frames++; acc += dt;
-  if (acc > 1) { ui.fps.textContent = Math.round(frames / acc) + ' fps'; frames = 0; acc = 0; }
+  if (acc > 1 && !DEBUG) { ui.fps.textContent = Math.round(frames / acc) + ' fps'; frames = 0; acc = 0; }
+}
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  simT += dt; tick(dt, simT);
 });
-window.__game = { player, level, camera, scene, input };
+window.__sim = (seconds, dt = 1 / 30, renderLast = false) => { const n = Math.round(seconds / dt); for (let k = 0; k < n; k++) { simT += dt; tick(dt, simT, renderLast && k === n - 1); } };
+window.__game = { player, level, camera, scene, input, captain, nav };
