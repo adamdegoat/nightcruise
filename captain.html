@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache">
+<title>Nightcruise · the captain</title>
+<style>
+  :root { --ink: #d9d4c7; --dim: #7d7a70; --bg: #050607; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font: 13px/1.3 ui-monospace, "SF Mono", Menlo, monospace; -webkit-user-select: none; user-select: none; }
+  canvas { display: block; touch-action: none; }
+  #bar { position: fixed; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom)); display: flex; gap: 6px; flex-wrap: wrap; }
+  #bar button { background: rgba(10,10,10,.72); color: var(--ink); border: 1px solid #2c2b27; padding: 9px 12px;
+    font: inherit; letter-spacing: .04em; border-radius: 2px; }
+  #bar button.on { border-color: var(--ink); }
+  #info { position: fixed; top: max(8px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); color: var(--dim); }
+  #load { position: fixed; inset: 0; display: grid; place-items: center; color: var(--dim); }
+</style>
+</head>
+<body>
+<div id="load">loading the captain…</div>
+<div id="info"></div>
+<div id="bar"></div>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x030405);
+scene.fog = new THREE.FogExp2(0x040607, 0.09);
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 60);
+camera.position.set(0, 1.62, 0);
+scene.add(camera);
+
+// ---- corridor: 2.6m wide, 3m-ish tall, 24m long, cabin doors both sides, wet floor
+const L = 24, W = 2.6, Hc = 2.5;
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x3a372f, roughness: 0.85 });
+const panelMat = new THREE.MeshStandardMaterial({ color: 0x2b2923, roughness: 0.7 });
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x1b1d1c, roughness: 0.18, metalness: 0.0 });
+const doorMat = new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.6 });
+const add = (geo, mat, x, y, z, cast = false) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.receiveShadow = true; m.castShadow = cast; scene.add(m); return m; };
+add(new THREE.PlaneGeometry(W, L).rotateX(-Math.PI / 2), floorMat, 0, 0, -L / 2 + 2);
+add(new THREE.PlaneGeometry(W, L).rotateX(Math.PI / 2), wallMat, 0, Hc, -L / 2 + 2);
+add(new THREE.PlaneGeometry(L, Hc).rotateY(Math.PI / 2), wallMat, -W / 2, Hc / 2, -L / 2 + 2);
+add(new THREE.PlaneGeometry(L, Hc).rotateY(-Math.PI / 2), wallMat, W / 2, Hc / 2, -L / 2 + 2);
+add(new THREE.PlaneGeometry(W, Hc), wallMat, 0, Hc / 2, -L + 2);
+for (let z = 0; z > -L + 3; z -= 3.2) {
+  for (const s of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.06, 2.05, 0.9), doorMat, s * (W / 2 - 0.03), 1.025, z - 1.2);
+    add(new THREE.BoxGeometry(0.04, 0.9, 2.6), panelMat, s * (W / 2 - 0.02), 0.45, z - 2.7);
+  }
+}
+// puddles: darker mirror patches
+for (let i = 0; i < 8; i++) {
+  const p = add(new THREE.CircleGeometry(0.3 + Math.random() * 0.5, 20).rotateX(-Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: 0x0a0c0c, roughness: 0.03 }), (Math.random() - .5) * 1.6, 0.002, -Math.random() * 20);
+  p.scale.x = 1.6;
+}
+
+// ---- lights: one cold emergency lamp every 6m that flickers; the flashlight is the main light
+scene.add(new THREE.HemisphereLight(0x1a2630, 0x050505, 0.35));
+const lamps = [];
+for (let z = -3; z > -L + 2; z -= 6) {
+  const l = new THREE.PointLight(0x9fc4ff, 2.2, 7, 1.6); l.position.set(0, Hc - 0.15, z); scene.add(l);
+  add(new THREE.BoxGeometry(0.3, 0.05, 0.12), new THREE.MeshBasicMaterial({ color: 0xbcd6ff }), 0, Hc - 0.03, z);
+  lamps.push({ l, base: 2.2, t: Math.random() * 10 });
+}
+const torch = new THREE.SpotLight(0xfff1dc, 14, 18, Math.PI / 7, 0.45, 1.3);
+window.__torch = torch;
+torch.position.set(0.18, -0.2, 0); torch.castShadow = true;
+torch.shadow.mapSize.set(512, 512); torch.shadow.camera.near = 0.2; torch.shadow.bias = -0.0005;
+camera.add(torch); camera.add(torch.target); torch.target.position.set(0, -0.15, -3);
+let torchOn = true;
+
+// ---- the captain
+let captain, mixer, actions = {}, current, jaw, head, neck, bones = {};
+const clock = new THREE.Clock();
+new GLTFLoader().load('captain.glb?v=' + Date.now(), (g) => {
+  captain = g.scene;
+  captain.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
+      const m = o.material;
+      if (m.name === 'milky_eye') { m.roughness = 0.12; m.emissive = new THREE.Color(0x6f7c78); m.emissiveIntensity = 0.12; }
+      if (m.name === 'wet_hair') { m.roughness = 0.5; m.side = THREE.DoubleSide; }
+      if (m.name === 'seaweed') { m.side = THREE.DoubleSide; m.roughness = 0.35; }
+      if (m.name === 'coat') m.side = THREE.DoubleSide;
+    }
+    if (o.isBone) bones[o.name] = o;
+  });
+  jaw = bones.jaw; head = bones.head; neck = bones.neck_01;
+  // wrong proportions: stretched neck and forearms, oversized hands. Bone scale is applied every frame
+  // after the mixer (animations only key rotation), so set once on the rest bones.
+  window.__tune = TUNE; window.__cap = captain; window.__setMode = setMode; applyTune();
+  captain.position.set(0, 0, -16);
+  scene.add(captain);
+  mixer = new THREE.AnimationMixer(captain);
+  for (const c of g.animations) {
+    // clips carry baked scale keys (all 1.0) that would undo the proportion tuning: drop them
+    c.tracks = c.tracks.filter((tr) => !tr.name.endsWith('.scale'));
+    actions[c.name] = mixer.clipAction(c);
+  }
+  document.getElementById('load').remove();
+  const q = new URLSearchParams(location.search);
+  if (q.get('z')) captain.position.z = +q.get('z');
+  if (q.get('view')) view = q.get('view');
+  if (q.get('snap') === '0') noSnap = true;
+  if (q.get('gape')) TUNE.gape = +q.get('gape');
+  if (q.get('ui') === '0') { bar.style.display = 'none'; info.style.display = 'none'; }
+  setMode(q.get('mode') || 'walk');
+  if (q.get('mode') === 'catch') { captain.position.z = -7; catching = true; setMode('run'); }
+}, undefined, (e) => { document.getElementById('load').textContent = 'failed to load: ' + e.message; });
+
+// live-tunable look (numbers get baked back into the Blender scripts once approved)
+const TUNE = { neck: 1.35, forearm: 1.28, hand: 1.22, finger: 1.3, gape: 0.32, skin: 0.8, coat: 0.7, faceDist: 0.62, torchNear: 3 };
+function applyTune() {
+  const sc = (n, v) => { if (bones[n]) bones[n].scale.set(1, v, 1); };
+  sc('neck_01', TUNE.neck);
+  for (const s_ of ['l', 'r']) {
+    sc('lowerarm_' + s_, TUNE.forearm);
+    if (bones['hand_' + s_]) bones['hand_' + s_].scale.set(TUNE.hand, TUNE.hand / TUNE.forearm, TUNE.hand);
+    for (const f of ['index', 'middle', 'ring', 'pinky']) sc(`${f}_01_${s_}`, TUNE.finger), sc(`${f}_02_${s_}`, TUNE.finger);
+  }
+  captain.traverse((o) => {
+    if (!o.isMesh) return;
+    const m = o.material;
+    if (m.name === 'drowned_skin') m.color.setScalar(TUNE.skin);
+    if (m.name === 'coat' || m.name === 'trousers') { m.color.setScalar(TUNE.coat); m.roughness = 0.85; }
+  });
+}
+// modes: speed in m/s along the corridor toward you
+const MODES = { idle: 0, walk: 0.75, run: 3.4, attack: 0, rise: 0, look: 0, grab: 0, stagger: 0, push: 0 };
+let mode = 'walk';
+function setMode(m) {
+  mode = m;
+  const next = actions[m]; if (!next) return;
+  next.reset(); next.setLoop(['attack', 'rise', 'grab', 'stagger'].includes(m) ? THREE.LoopOnce : THREE.LoopRepeat);
+  next.clampWhenFinished = true;
+  if (m === 'run') next.timeScale = 0.85;
+  if (current && current !== next) next.crossFadeFrom(current, 0.25, false);
+  next.play(); current = next;
+  for (const b of bar.children) b.classList.toggle('on', b.dataset.m === m);
+}
+
+// ---- jerky wrongness layered on top of the animation: sudden neck snaps, twitching jaw
+let snap = { t: 0, hold: 0, rx: 0, ry: 0, rz: 0 }, noSnap = false;
+function wrongness(dt, t) {
+  if (!head) return;
+  if (noSnap) { if (jaw) jaw.rotation.x += TUNE.gape; return; }
+  snap.t += dt;
+  if (snap.t > snap.hold) {
+    snap.t = 0; snap.hold = 0.12 + Math.random() * (Math.random() < 0.3 ? 1.4 : 0.35);
+    const big = Math.random() < 0.18;
+    snap.rx = (Math.random() - .5) * (big ? 0.9 : 0.25);
+    snap.ry = (Math.random() - .5) * (big ? 1.0 : 0.2);
+    snap.rz = (Math.random() - .5) * (big ? 1.1 : 0.3);
+  }
+  head.rotation.x += snap.rx; head.rotation.y += snap.ry; head.rotation.z += snap.rz;
+  if (jaw) jaw.rotation.x += TUNE.gape + Math.sin(t * 23) * 0.05 * (Math.sin(t * 1.7) > 0.4 ? 1 : 0.1);
+}
+
+// ---- drips
+const DRIPS = 60;
+const dripGeo = new THREE.BufferGeometry();
+const dripPos = new Float32Array(DRIPS * 3), dripVel = new Float32Array(DRIPS);
+dripGeo.setAttribute('position', new THREE.BufferAttribute(dripPos, 3));
+const drips = new THREE.Points(dripGeo, new THREE.PointsMaterial({ color: 0x9fb3b0, size: 0.018, transparent: true, opacity: 0.8 }));
+scene.add(drips);
+function resetDrip(i) {
+  if (!captain) return;
+  dripPos[i * 3] = captain.position.x + (Math.random() - .5) * 0.5;
+  dripPos[i * 3 + 1] = 0.6 + Math.random() * 1.2;
+  dripPos[i * 3 + 2] = captain.position.z + (Math.random() - .5) * 0.3;
+  dripVel[i] = 0;
+}
+for (let i = 0; i < DRIPS; i++) resetDrip(i);
+
+// ---- view: default is standing in the corridor; "face" puts you right in front of him
+let view = 'corridor';
+let catching = false, shake = 0;
+const bar = document.getElementById('bar');
+for (const [label, fn, key] of [
+  ['walk', () => setMode('walk'), 'walk'], ['run', () => setMode('run'), 'run'], ['idle', () => setMode('idle'), 'idle'],
+  ['grab', () => setMode('grab'), 'grab'], ['rise', () => setMode('rise'), 'rise'],
+  ['catch', () => { if (!captain) return; view = 'corridor'; yaw = 0; pitch = 0; captain.position.z = -7; catching = true; setMode('run'); }, null],
+  ['torch', () => { torchOn = !torchOn; torch.visible = torchOn; }, null],
+  ['face', () => { view = view === 'face' ? 'corridor' : 'face'; }, null],
+  ['restart', () => { if (captain) captain.position.z = -16; setMode(mode); }, null],
+]) {
+  const b = document.createElement('button'); b.textContent = label; if (key) b.dataset.m = key;
+  b.onclick = fn; bar.appendChild(b);
+}
+
+// drag to look around
+let yaw = 0, pitch = 0, drag = null;
+addEventListener('pointerdown', (e) => { if (e.target === renderer.domElement) drag = { x: e.clientX, y: e.clientY }; });
+addEventListener('pointermove', (e) => { if (!drag) return; yaw -= (e.clientX - drag.x) * 0.004; pitch -= (e.clientY - drag.y) * 0.004; pitch = Math.max(-1, Math.min(1, pitch)); drag = { x: e.clientX, y: e.clientY }; });
+addEventListener('pointerup', () => drag = null);
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+
+const info = document.getElementById('info');
+let frames = 0, acc = 0;
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  if (mixer) mixer.update(dt);
+  wrongness(dt, t);
+  if (captain) {
+    captain.position.z += MODES[mode] * dt;
+    if (catching && captain.position.z > -1.3) { catching = false; setMode('grab'); shake = 0.9; }
+    if (mode === 'grab' && captain.position.z < -0.55) captain.position.z += 2.2 * dt;
+    if (captain.position.z > -1.2 && MODES[mode] > 0) captain.position.z = -16;
+    if (view === 'face') {
+      const hp = new THREE.Vector3(); head.getWorldPosition(hp);
+      // below and in front of his face, looking up: the angle you'd see him from when he catches you
+      camera.position.set(hp.x + 0.12, hp.y - 0.16, hp.z + TUNE.faceDist);
+      camera.lookAt(hp.x, hp.y - 0.02, hp.z);
+      // aim the torch at his face (in the game it follows your view; here the camera sits below him)
+      camera.updateMatrixWorld(); torch.target.position.copy(camera.worldToLocal(hp.clone().add(new THREE.Vector3(0, 0.05, 0.08))));
+    } else {
+      camera.position.set(0, 1.62, 0);
+      torch.target.position.set(0, -0.15, -3);
+      camera.rotation.set(pitch, yaw, 0, 'YXZ');
+      if (shake > 0) {
+        shake -= dt;
+        camera.position.x += (Math.random() - .5) * 0.06 * shake; camera.position.y += (Math.random() - .5) * 0.06 * shake;
+        camera.rotation.z = (Math.random() - .5) * 0.08 * shake;
+        if (jaw) jaw.rotation.x += 0.35 * Math.min(1, shake * 2);
+      }
+    }
+  }
+  for (const L_ of lamps) {
+    L_.t += dt;
+    const f = Math.sin(L_.t * 3) > 0.97 || Math.random() < 0.012 ? 0.05 : 1;
+    L_.l.intensity = L_.base * f;
+  }
+  for (let i = 0; i < DRIPS; i++) {
+    dripVel[i] += 9.8 * dt; dripPos[i * 3 + 1] -= dripVel[i] * dt;
+    if (dripPos[i * 3 + 1] < 0) resetDrip(i);
+  }
+  dripGeo.attributes.position.needsUpdate = true;
+  renderer.render(scene, camera);
+  frames++; acc += dt;
+  if (view === 'face') torch.intensity = TUNE.torchNear; else torch.intensity = 14;
+  if (acc > 1) { info.textContent = `${Math.round(frames / acc)} fps`; frames = 0; acc = 0; }
+});
+</script>
+</body>
+</html>
