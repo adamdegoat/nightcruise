@@ -47,6 +47,10 @@ const MATS = {
   glass:     { m: () => new THREE.MeshStandardMaterial({ color: 0x1d2a22, roughness: 0.1, metalness: 0.2, emissive: 0x050a07 }), s: 1 },
   water:     { m: () => new THREE.MeshStandardMaterial({ color: 0x050808, roughness: 0.04, metalness: 0.3 }), s: 1 },
   black:     { m: () => new THREE.MeshBasicMaterial({ color: 0x000000 }), s: 1 },
+  leather:   { m: () => new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 0.6 }), s: 1 },
+  redpaint:  { m: () => new THREE.MeshStandardMaterial({ color: 0x7a1410, roughness: 0.45, metalness: 0.2 }), s: 1 },
+  paper:     { m: () => new THREE.MeshStandardMaterial({ color: 0x6e6a5e, roughness: 1 }), s: 1 },
+  white:     { m: () => new THREE.MeshStandardMaterial({ color: 0xb9b6ad, roughness: 0.4 }), s: 1 },
   porthole:  { m: () => new THREE.MeshBasicMaterial({ color: 0x1b2836 }), s: 1 },
 };
 
@@ -91,6 +95,17 @@ export function buildLevel(scene) {
     const cuts = openings.map((o) => ({ s: o.c - o.w / 2, e: o.c + o.w / 2, h: o.h ?? 2.05 })).sort((p, q) => p.s - q.s);
     const pieces = []; let cur = a0;
     for (const c of cuts) { if (c.s > cur) pieces.push([cur, c.s, 0, h]); pieces.push([c.s, c.e, c.h, h]); cur = c.e; }
+    // door frames (architraves) on both faces of every opening
+    const fk = look === 'rust' || look === 'walltile' ? 'steel' : 'darkwood';
+    for (const c of cuts) {
+      if (c.h >= h - 0.01) continue;                       // full-height gap, no frame
+      for (const at of [c.s - 0.04, c.e + 0.04]) {
+        if (alongX) box(bucket, fk, at, c.h / 2, fixed, 0.08, c.h, T + 0.05);
+        else box(bucket, fk, fixed, c.h / 2, at, T + 0.05, c.h, 0.08);
+      }
+      if (alongX) box(bucket, fk, (c.s + c.e) / 2, c.h + 0.04, fixed, c.e - c.s + 0.16, 0.08, T + 0.05);
+      else box(bucket, fk, fixed, c.h + 0.04, (c.s + c.e) / 2, T + 0.05, 0.08, c.e - c.s + 0.16);
+    }
     if (cur < a1) pieces.push([cur, a1, 0, h]);
     for (const [s, e, y0, y1] of pieces) {
       if (e - s < 0.005 || y1 - y0 < 0.005) continue;
@@ -102,6 +117,14 @@ export function buildLevel(scene) {
       };
       if (look === 'cabin') { put('panel', y0, Math.max(y0, Math.min(1.0, y1))); put('wallpaper', Math.max(1.0, y0), y1); }
       else put(look, y0, y1);
+      // trims: skirting, dado rail (cabin walls), cornice under the ceiling
+      const trim = (key, yc, th, depth) => {
+        if (alongX) box(bucket, key, mid, yc, fixed, len, th, T + depth);
+        else box(bucket, key, fixed, yc, mid, T + depth, th, len);
+      };
+      const tk = look === 'rust' ? 'steel' : 'darkwood';
+      if (y0 === 0) { trim(tk, 0.06, 0.12, 0.03); if (look === 'cabin') trim('darkwood', 1.0, 0.05, 0.05); }
+      trim(tk, y1 - 0.05, 0.1, 0.06);
       if (y0 === 0) {
         if (alongX) collide(s, e, fixed - T / 2, fixed + T / 2);
         else collide(fixed - T / 2, fixed + T / 2, s, e);
@@ -317,6 +340,46 @@ export function buildLevel(scene) {
   for (const [x, z, r] of puddles) {
     const g = new THREE.CircleGeometry(r, 18); g.rotateX(-Math.PI / 2); g.scale(1.3, 1, 0.7); g.translate(x, 0.004, z); addGeo(bucket, 'water', g);
   }
+
+  // =========================== what the passengers left behind ===========================
+  let seed = 11; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  // cabins: suitcase (some burst open), bedside table, clothes heaped on the floor
+  for (const side of [1, -1]) for (let i = 0; i < CAB_N; i++) {
+    const x0 = CAB_X0 + CAB_W * i, zOut = (1.1 + CAB_D) * side, zFar = zOut - 0.75 * side;
+    solid('darkwood', x0 + 1.1, 0.3, zOut - 0.3 * side, 0.4, 0.6, 0.4);                            // bedside table
+    const lamp = new THREE.CylinderGeometry(0.06, 0.1, 0.22, 10); lamp.translate(x0 + 1.1, 0.71, zOut - 0.3 * side); addGeo(bucket, 'brass', lamp);
+    const sx = x0 + 1.3 + rnd() * 1.2, sz = zFar - 1.15 * side, a = rnd() * 1.2;
+    if (rnd() < 0.5) {
+      solid('leather', sx, 0.12, sz, 0.72, 0.24, 0.46, a);                                       // closed suitcase
+    } else {
+      box(bucket, 'leather', sx, 0.06, sz, 0.72, 0.12, 0.46, a);                                // burst open: base
+      box(bucket, 'leather', sx + Math.sin(a) * 0.3 * side, 0.22, sz - Math.cos(a) * 0.3 * side, 0.72, 0.02, 0.44, a); // lid
+      box(bucket, 'linen', sx, 0.14, sz, 0.6, 0.06, 0.36, a + 0.2);
+      collide(sx - 0.45, sx + 0.45, sz - 0.45, sz + 0.45);
+    }
+    for (let k = 0; k < 3; k++) box(bucket, 'linen', x0 + 0.6 + rnd() * 2.6, 0.03, (1.1 + 0.6 + rnd() * 1.5) * side, 0.35 + rnd() * 0.3, 0.05, 0.3 + rnd() * 0.3, rnd() * 3);
+  }
+  // corridor: overturned room-service trolley, a fire extinguisher on the floor, a life ring, papers everywhere
+  solid('steel', 16.3, 0.35, 0.45, 0.9, 0.7, 0.5, 0.35);
+  box(bucket, 'linen', 16.3, 0.72, 0.45, 0.95, 0.03, 0.55, 0.35);
+  for (let k = 0; k < 3; k++) { const pl = new THREE.CylinderGeometry(0.12, 0.1, 0.02, 14); pl.translate(15.4 + k * 0.35, 0.011, -0.2 + k * 0.2); addGeo(bucket, 'white', pl); }
+  const ext = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 10); ext.rotateZ(Math.PI / 2); ext.rotateY(0.6); ext.translate(11.2, 0.08, -0.65); addGeo(bucket, 'redpaint', ext);
+  const ring = new THREE.TorusGeometry(0.3, 0.07, 8, 20); ring.translate(24.7, 1.5, -1.0); addGeo(bucket, 'redpaint', ring);
+  for (let k = 0; k < 40; k++) box(bucket, 'paper', 0.5 + rnd() * 27, 0.004 + k * 0.0004, (rnd() - 0.5) * 1.8, 0.21, 0.004, 0.29, rnd() * 3.14);
+  // dining hall: plates, glasses and bottles left on tables and floor
+  for (const tx of [30.5, 33.5, 36.5]) for (const tz of [-5, -2.4, 2.4, 5]) {
+    if (rnd() < 0.3) continue;
+    for (let k = 0; k < 3; k++) {
+      const a = rnd() * 6.28, r = 0.3 + rnd() * 0.15;
+      const pl = new THREE.CylinderGeometry(0.11, 0.09, 0.015, 14); pl.translate(tx + Math.cos(a) * r, 0.795, tz + Math.sin(a) * r); addGeo(bucket, 'white', pl);
+      if (rnd() < 0.6) { const gl = new THREE.CylinderGeometry(0.035, 0.025, 0.14, 8); gl.translate(tx + Math.cos(a + 0.4) * r * 0.7, 0.86, tz + Math.sin(a + 0.4) * r * 0.7); addGeo(bucket, 'glass', gl); }
+    }
+  }
+  for (let k = 0; k < 8; k++) { const b = new THREE.CylinderGeometry(0.035, 0.04, 0.3, 6); b.rotateZ(Math.PI / 2); b.rotateY(rnd() * 6); b.translate(29 + rnd() * 12, 0.04, (rnd() - 0.5) * 12); addGeo(bucket, 'glass', b); }
+  // kitchen: pots left on the counter
+  for (let k = 0; k < 4; k++) { const pot = new THREE.CylinderGeometry(0.15, 0.14, 0.18 + k * 0.03, 14); pot.translate(39 + k * 1.1, 0.99 + k * 0.015, -6.55); addGeo(bucket, 'steel', pot); }
+  // crew room: pipes along the ceiling
+  for (const [z, r] of [[-3.2, 0.06], [-2.95, 0.04], [3.2, 0.08]]) { const p = new THREE.CylinderGeometry(r, r, 7, 8); p.rotateZ(Math.PI / 2); p.translate(-3.5, H_CREW - 0.15, z); addGeo(bucket, 'rust', p); }
 
   // ---------- merge everything static, one mesh per material ----------
   for (const [key, list] of Object.entries(bucket)) {
